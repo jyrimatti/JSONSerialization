@@ -1,6 +1,6 @@
 case class EmployeeDto(
 	name: String,
-	age: Int,
+	age: Option[Int],
 	salary: Money
 )
 
