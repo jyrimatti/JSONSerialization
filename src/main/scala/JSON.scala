@@ -5,128 +5,142 @@ import scala.collection.immutable.Set
 object Json {
 	JSON.globalNumberParser = s => BigDecimal(s)
 	
-	class O(var m: Map[String,Json.Obj] = null, var f: String = null) {
+	abstract class O(var m: Map[String,Json.O] = null, var f: String = null) {
 		override def equals(obj: Any) = {
-	  	val ret = obj match { 
-	  		case x: String if m == null => false
-	    	case x: String if m.keySet contains x => f = x; true
-	    	case _ => true 
+	  	obj match { 
+	    	case x: String => f = x; true 
 	  	}
-			//println("Oequals: " + obj + " = " + ret)
-			ret
 	  }
+		def toJSON: Any
 	}
 	object O {
 		def unapply(s: O): Option[String] = Some(s).asInstanceOf[Option[String]]
 	}
 	
-	class Obj extends O
-	
-	def serialize: Obj => String = _.toString
+	def serialize: O => String = _.toJSON.toString
 	def deserialize[T: Deserializable](s: String): Option[T] = try {
-		JSON.parseFull(s) map foo collect {implicitly}
+		JSON.parseFull(s) map foo map {implicitly}
 	} catch {
 		case e: scala.MatchError => None
+		//case e: scala.MatchError => throw e
 	}
 	
-	type Serializable[A] = PartialFunction[A,Json.Obj]
+	type Serializable[A] = PartialFunction[A,O]
 	type Deserializable[A] = PartialFunction[O,A]
 	
-	case class Str(value: String) extends Obj {
-		override def toString = '"' + value.replace("\\", "\\\\").replace("\"", "\\\"") + '"'
+	trait JsonExtractor[T,OT <: {def value: T}] {
+		def unapply(s: O): Option[T] = s match {
+			case s: OT if s.m == null => Some(s.value)
+			case o: O if o.m.isDefinedAt(o.f) => unapply(o.m(o.f))
+			case _ => None
+		}
 	}
-	case class Number(value: BigDecimal) extends Obj {
+	
+	class Str(val value: String) extends O {
+		def toJSON = value
+	}
+	object Str extends JsonExtractor[String,Str]
+	
+	class Number(val value: BigDecimal) extends O {
 		def this(value: Int) = this(BigDecimal(value))
-		override def toString = value toString
+		def toJSON = value
 	}
-	case class Arr(value: Seq[Obj]) extends Obj {
-		override def toString = value mkString ("[", ", ", "]")
-	}
-	class Object(val value: Map[String,Obj]) extends Obj {
-		override def toString = value filter { _._2 != null } map {case (l,r) => '"' + l + '"' + ": " + r} mkString ("{\n", ",\n", "\n}")
-	}
+	object Number extends JsonExtractor[BigDecimal,Number]
 	
+	class Arr(val value: Seq[O]) extends O {
+		def toJSON = JSONArray(value map {_.toJSON} toList)
+	}
+	object Arr extends JsonExtractor[Seq[O],Arr]
 	
+	class Object(val value: Map[String,O]) extends O {
+		def toJSON = JSONObject(value filter { _._2 != null } map {
+			case (k,v) => (k, v.toJSON) 
+		})
+	}
 	
 	object Object {
 		def unapplySeq(elems: Json.Object): Option[Seq[O]] = {
-			val seq = new collection.SeqProxy[O] {
+			val seq: Seq[O] = new collection.SeqProxy[O] {
+				def mock = new O {
+					def toJSON = throw new RuntimeException()
+					m = elems.value
+				}
 				val self = elems.value.map { a => 
 						val y = a._2 match {
-							case Str(s) => Str(s);
-							case Number(n) => Number(n)
-							case Arr(a) => Arr(a)
+							case s: Str => new Str(s.value);
+							case n: Number => new Number(n.value)
+							case a: Arr => new Arr(a.value)
 							case o: Object => new Object(o.value)
 						}
 						y.m = elems.value
-						y.f = a._1
 						y
 					} toSeq
-				override def apply(i: Int) = if (i >= size) super.apply(size-1) else super.apply(i)
+				override def apply(i: Int) = if (i >= size) mock else super.apply(i)
 				override def lengthCompare(i: Int) = 0
 			}
 			Some(seq)
 		}
 	}
 
-	object MockO extends O {
-		override def equals(a: Any) = true
-		override def toString = "MockO"
-	}
-	
-	val foo: Any => Json.Obj = _ match {
-		case i: BigDecimal => Number(i)
-		case s: String => Str(s)
-		case a: List[_] => Arr(a map foo toSeq)
+	val foo: Any => Json.O = _ match {
+		case i: BigDecimal => new Number(i)
+		case s: String => new Str(s)
+		case a: List[_] => new Arr(a map foo toSeq)
 		case m: Map[String,_] => new Object(m map { case (a,b) => (a, foo(b)) })
 	}
 	
-	implicit val StringIsSerializable: Serializable[String] = { case x => Str(x) }
-	implicit val IntIsSerializable: Serializable[Int] = { case x => Number(x) }
-	implicit val BigDecimalIsSerializable: Serializable[BigDecimal] = { case x => Number(x) }
+	implicit val StringIsSerializable: Serializable[String] = { case x => new Str(x) }
+	implicit val IntIsSerializable: Serializable[Int] = { case x => new Number(x) }
+	implicit val BigDecimalIsSerializable: Serializable[BigDecimal] = { case x => new Number(x) }
 	
-	implicit def SeqIsSerializable[T: Serializable]: Serializable[Seq[T]] = { case x => Arr(x map {a => implicitly[Json.Obj](a)}) }
+	implicit def SeqIsSerializable[T: Serializable]: Serializable[Seq[T]] = { case x => new Arr(x map {a => implicitly[Json.O](a)}) }
 	implicit def OptionalIsSerializable[T: Serializable]: Serializable[Option[T]] = {
 		case Some(x) => x
 		case None => null
 	}
 	
 	implicit val StringIsDeserializable: Deserializable[String] = {
-		case Json.Str(value) => value
-		case x:O if x.m != null && x.f != null && StringIsDeserializable.isDefinedAt(x.m(x.f)) => StringIsDeserializable(x.m(x.f))
+		case x@Json.Str(value) => value
 	}
 	
 	implicit val IntIsDeserializable: Deserializable[Int] = {
-		case Number(value) if value.isValidInt => value.intValue
+		case x@Number(value) if x.m == null && value.isValidInt => value.intValue
 		case x:O if x.m != null && x.f != null && IntIsDeserializable.isDefinedAt(x.m(x.f)) => IntIsDeserializable(x.m(x.f))
+		case x => throw new RuntimeException(x)
 	}
 	
 	implicit val BigDecimalIsDeserializable: Deserializable[BigDecimal] = {
-		case Number(value) => value
+		case x@Number(value) if x.m == null => value
 		case x:O if x.m != null && x.f != null && BigDecimalIsDeserializable.isDefinedAt(x.m(x.f)) => BigDecimalIsDeserializable(x.m(x.f))
 	}
 	
-	implicit def SeqIsDeserializable[T](implicit e: Deserializable[T]): Deserializable[Seq[T]] = {
-		case Arr(value) => value collect { case x if e.isDefinedAt(x) => implicitly[T](x) }
+	implicit def s[T](x: Json.O)(implicit e: Deserializable[T]): Seq[T] = SeqIsDeserializable(e)(x)
+	def SeqIsDeserializable[T](implicit e: Deserializable[T]): Deserializable[Seq[T]] = {
+		case Arr(value) => value map { case x if e.isDefinedAt(x) => e(x) }
 	}
 	
-	implicit def OptionalIsDeserializable[T](implicit i: Deserializable[T]): Deserializable[Option[T]] = {
-		case x:Json.Obj if i.isDefinedAt(x) => Some(i(x))
-		case o: O if o.m != null && o.f != null && OptionalIsDeserializable(i).isDefinedAt(o.m(o.f)) => OptionalIsDeserializable(i)(o.m(o.f))
-		case o: O => None
+	implicit def o[T](x: Json.O)(implicit i: Deserializable[T]): Option[T] = OptionIsDeserializable(i)(x)
+	def OptionIsDeserializable[T](implicit i: Deserializable[T]): Deserializable[Option[T]] = {
+		case x: O if x.m == null && i.isDefinedAt(x) => Some(i(x))
+		case x: O if x.m != null && x.f != null && x.m.isDefinedAt(x.f) && OptionIsDeserializable(i).isDefinedAt(x.m(x.f)) => OptionIsDeserializable(i)(x.m(x.f))
+		case _ => None
 	}
 	
-	implicit val OptionalStringIsDeserializable: Deserializable[Option[String]] = OptionalIsDeserializable
-	implicit val OptionalIntIsDeserializable: Deserializable[Option[Int]] = OptionalIsDeserializable
-	implicit val OptionalBigDecimalIsDeserializable: Deserializable[Option[BigDecimal]] = OptionalIsDeserializable
+	implicit val OptionalStringIsDeserializable: Deserializable[Option[String]] = OptionIsDeserializable
+	implicit val OptionalIntIsDeserializable: Deserializable[Option[Int]] = OptionIsDeserializable
+	implicit val OptionalBigDecimalIsDeserializable: Deserializable[Option[BigDecimal]] = OptionIsDeserializable
+	
+	implicit val SeqStringIsDeserializable: Deserializable[Seq[String]] = SeqIsDeserializable
+	implicit val SeqIntIsDeserializable: Deserializable[Seq[Int]] = SeqIsDeserializable
+	implicit val SeqBigDecimalIsDeserializable: Deserializable[Seq[BigDecimal]] = SeqIsDeserializable
 	
 	implicit def string2pair(name: String) = new {
-		def ->[B <% Json.Obj](y: B): (String,Json.Obj) = (name,y)
+		def ->[B <% O](y: B): (String,Json.O) = (name,y)
 	}
 	
-	private type T = (String,Json.Obj)
-	implicit def Tuple1IsSerializable: Tuple1[T] => Json.Obj = t => new Json.Object(Map(t._1))
-	implicit def Tuple2IsSerializable: Tuple2[T,T] => Json.Obj = t => new Json.Object(Map(t._1, t._2))
-	implicit def Tuple3IsSerializable: Tuple3[T,T,T] => Json.Obj = t => new Json.Object(Map(t._1, t._2, t._3))
-	implicit def Tuple4IsSerializable: Tuple4[T,T,T,T] => Json.Obj = t => new Json.Object(Map(t._1, t._2, t._3, t._4))
+	private type T = (String,Json.O)
+	implicit def Tuple1IsSerializable: Tuple1[T] => Json.O = t => new Json.Object(Map(t._1))
+	implicit def Tuple2IsSerializable: Tuple2[T,T] => Json.O = t => new Json.Object(Map(t._1, t._2))
+	implicit def Tuple3IsSerializable: Tuple3[T,T,T] => Json.O = t => new Json.Object(Map(t._1, t._2, t._3))
+	implicit def Tuple4IsSerializable: Tuple4[T,T,T,T] => Json.O = t => new Json.Object(Map(t._1, t._2, t._3, t._4))
 }

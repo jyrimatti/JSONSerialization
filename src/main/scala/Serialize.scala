@@ -5,9 +5,9 @@ import Json._
 object Serialize {
 	
 	implicit val m2j: Serializable[Money] = { case x =>
-		x.euros + "." + x.cents + "Û"
+		x.euros + "." + x.cents + "â‚¬"
 	}
-	val regex = "([0-9]+)[.]([0-9]+)Û".r
+	val regex = "([0-9]+)[.]([0-9]+)â‚¬".r
 	implicit val j2m: Deserializable[Money] = {
 		case Json.Str(regex(e, c)) => Money(euros = e.toInt, cents = c.toInt)
 	}
@@ -31,12 +31,11 @@ object Serialize {
 				"employees" -> x.employees
 	)}
 	
-	implicit val se2j: Deserializable[Seq[EmployeeDto]] = SeqIsDeserializable
 	implicit val j2d: Deserializable[DepartmentDto] = {
 		case Json.Object(n@O("name"), 
 										 e@O("employees")
 										 ) => DepartmentDto(name = n, 
-												 								employees = e)
+												 								employees = s[EmployeeDto](e))
 	}
 
 	def main(args: Array[String]): Unit = {
@@ -70,12 +69,12 @@ object Serialize {
 		println
 		
 		println("Deserialization succeeding with missing optional properties")
-		val withMissing = Json.deserialize[EmployeeDto]("""{"name": "Jack Doe", "salary": "14.03Û"}""")
+		val withMissing = Json.deserialize[EmployeeDto]("""{"name": "Jack Doe", "salary": "14.03â‚¬"}""")
 		println(withMissing)
 		println
 		
 		println("Deserialization succeeding with additional properties")
-		val withAdditional = Json.deserialize[EmployeeDto]("""{"name": "Jack Doe", "age": 42, "salary": "14.03Û", "foo": "bar"}""")
+		val withAdditional = Json.deserialize[EmployeeDto]("""{"name": "Jack Doe", "age": 42, "salary": "14.03â‚¬", "foo": "bar"}""")
 		println(withAdditional)
 		println
 		
