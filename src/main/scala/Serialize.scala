@@ -105,14 +105,14 @@ object Serialize {
 	
 	// Almost statically type safe deserialization by reflection
 	// + compiler warns if a type is not deserializable
-	// +- compiler warns when new parameters are added to the object, but wouldn't have to (must use sN instead of overloaded s)
-	// +- compiler warns when parameters are removed from the object, but wouldn't have to (must use sN instead of overloaded s)
+	// + compiler does not nag when new parameters are added to the object
+	// + compiler does not nag when parameters are removed from the object
 	// - uses the given method as constructor but gets the parameters and their order from class fields =( Can this be improved in Scala 2.10?
 	// + clean syntax
 	// + Json keys deduced by reflection
-	implicit val organizationdto_d: Deserializable[OrganizationDto] = p2 {
-		case Json.Reflect() => OrganizationDto.apply
-	}
+	implicit val organizationdto_d: Deserializable[OrganizationDto] = OrganizationDto.apply _
+	
+	
 
 	def main(args: Array[String]): Unit = {
 		def test(msg: String, json: String) = {

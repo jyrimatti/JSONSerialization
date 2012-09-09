@@ -35,7 +35,13 @@ object Json {
 	                E1: Serializable: Manifest,
 	                E2: Serializable: Manifest,
 	                E3: Serializable: Manifest,
-	                E4: Serializable: Manifest](d: => (E1,E2,E3,E4) => T): Serializable[T] = {
+	                E4: Serializable: Manifest](d: => (E1,E2,E3,E4) => T): Serializable[T] = s5(d.asInstanceOf[(E1,E2,E3,E4,String) => T])
+  implicit def s5[T: Manifest,
+	                E1: Serializable: Manifest,
+	                E2: Serializable: Manifest,
+	                E3: Serializable: Manifest,
+	                E4: Serializable: Manifest,
+	                E5: Serializable: Manifest](d: => (E1,E2,E3,E4,E5) => T): Serializable[T] = {
 		// Currently this uses field names from getDeclaredFields, which matches the constructor
 		// only by accident...
 		val keys = manifest[T].erasure.getDeclaredFields map {_.getName}
@@ -46,9 +52,31 @@ object Json {
 				case ((k,v),i) if i == 1 => (k,v.asInstanceOf[E2]: O)
 				case ((k,v),i) if i == 2 => (k,v.asInstanceOf[E3]: O)
 				case ((k,v),i) if i == 3 => (k,v.asInstanceOf[E4]: O)
+				case ((k,v),i) if i == 4 => (k,v.asInstanceOf[E5]: O)
 			} toMap)
 		}
-	}	
+	}
+	
+	implicit def d1[T: Manifest,
+	                E1: Deserializable: Manifest](d: (E1) => T): Deserializable[T] = p1 {case Reflect() => d}
+	implicit def d2[T: Manifest,
+	                E1: Deserializable: Manifest,
+	                E2: Deserializable: Manifest](d: (E1,E2) => T): Deserializable[T] = p2 {case Reflect() => d}
+	implicit def d3[T: Manifest,
+	                E1: Deserializable: Manifest,
+	                E2: Deserializable: Manifest,
+	                E3: Deserializable: Manifest](d: (E1,E2,E3) => T): Deserializable[T] = p3 {case Reflect() => d}
+	implicit def d4[T: Manifest,
+	                E1: Deserializable: Manifest,
+	                E2: Deserializable: Manifest,
+	                E3: Deserializable: Manifest,
+	                E4: Deserializable: Manifest](d: (E1,E2,E3,E4) => T): Deserializable[T] = p4 {case Reflect() => d}
+	implicit def d5[T: Manifest,
+	                E1: Deserializable: Manifest,
+	                E2: Deserializable: Manifest,
+	                E3: Deserializable: Manifest,
+	                E4: Deserializable: Manifest,
+	                E5: Deserializable: Manifest](d: (E1,E2,E3,E4,E5) => T): Deserializable[T] = p5 {case Reflect() => d}
 	
 	implicit def p1[T: Manifest,
 	                E1: Deserializable: Manifest](d: O => (E1) => T): Deserializable[T] = p2(d.asInstanceOf[O => (E1,String) => T])
@@ -63,7 +91,13 @@ object Json {
 	                E1: Deserializable: Manifest,
 	                E2: Deserializable: Manifest,
 	                E3: Deserializable: Manifest,
-	                E4: Deserializable: Manifest](d: O => (E1,E2,E3,E4) => T): Deserializable[T] = {
+	                E4: Deserializable: Manifest](d: O => (E1,E2,E3,E4) => T): Deserializable[T] = p5(d.asInstanceOf[O => (E1,E2,E3,E4,String) => T])
+	implicit def p5[T: Manifest,
+	                E1: Deserializable: Manifest,
+	                E2: Deserializable: Manifest,
+	                E3: Deserializable: Manifest,
+	                E4: Deserializable: Manifest,
+	                E5: Deserializable: Manifest](d: O => (E1,E2,E3,E4,E5) => T): Deserializable[T] = {
 	  case o: Object => {
 	  	val f: Any = d(o)
 	  	val keys: Seq[String] = if (o.keysInOrder eq Reflect.Indicator) {
@@ -82,11 +116,11 @@ object Json {
 	  			k.head*/
 	  		} else o.keysInOrder
 			(keys map o.elements) match {
-	  		case Seq() => println("bar"); null.asInstanceOf[T]
 				case Seq(p1) => f.asInstanceOf[(E1)=>T](p1)
 				case Seq(p1,p2) => f.asInstanceOf[(E1,E2)=>T](p1,p2)
 				case Seq(p1,p2,p3) => f.asInstanceOf[(E1,E2,E3)=>T](p1,p2,p3)
 				case Seq(p1,p2,p3,p4) => f.asInstanceOf[(E1,E2,E3,E4)=>T](p1,p2,p3,p4)
+				case Seq(p1,p2,p3,p4,p5) => f.asInstanceOf[(E1,E2,E3,E4,E5)=>T](p1,p2,p3,p4,p5)
 			}
 		}
 	}
@@ -236,12 +270,12 @@ object Json {
 		case _ => None
 	}
 	
-	implicit val OptionalStringIsDeserializable:     Deserializable[Option[String]] =     OptionIsDeserializable
-	implicit val OptionalIntIsDeserializable:        Deserializable[Option[Int]] =        OptionIsDeserializable
-	implicit val OptionalBigDecimalIsDeserializable: Deserializable[Option[BigDecimal]] = OptionIsDeserializable
+	implicit val OptionalStringIsDeserializable:        Deserializable[Option[String]]          = OptionIsDeserializable
+	implicit val OptionalIntIsDeserializable:           Deserializable[Option[Int]]             = OptionIsDeserializable
+	implicit val OptionalBigDecimalIsDeserializable:    Deserializable[Option[BigDecimal]]      = OptionIsDeserializable
 	
-	implicit val TraversableStringIsDeserializable:     Deserializable[Traversable[String]] =     TraversableIsDeserializable
-	implicit val TraversableIntIsDeserializable:        Deserializable[Traversable[Int]] =        TraversableIsDeserializable
+	implicit val TraversableStringIsDeserializable:     Deserializable[Traversable[String]]     = TraversableIsDeserializable
+	implicit val TraversableIntIsDeserializable:        Deserializable[Traversable[Int]]        = TraversableIsDeserializable
 	implicit val TraversableBigDecimalIsDeserializable: Deserializable[Traversable[BigDecimal]] = TraversableIsDeserializable
 	
 	implicit def string2pair(name: String) = new {
@@ -249,8 +283,27 @@ object Json {
 	}
 	
 	private type T = (String,O)
-	implicit def tuple1toO: Tuple1[T] => O = t => new Object(Map(t._1))
-	implicit def tuple2toO: Tuple2[T,T] => O = t => new Object(Map(t._1, t._2))
-	implicit def tuple3toO: Tuple3[T,T,T] => O = t => new Object(Map(t._1, t._2, t._3))
-	implicit def tuple4toO: Tuple4[T,T,T,T] => O = t => new Object(Map(t._1, t._2, t._3, t._4))
+	private val newO: Product => O = t => new Object(Map(t.productIterator.toSeq.asInstanceOf[Seq[T]]:_*))
+	implicit def t1O: Tuple1[T] => O = newO
+	implicit def t2O: Tuple2[T,T] => O = newO
+	implicit def t3O: Tuple3[T,T,T] => O = newO
+	implicit def t4O: Tuple4[T,T,T,T] => O = newO
+	implicit def t5O: Tuple5[T,T,T,T,T] => O = newO
+	implicit def t6O: Tuple6[T,T,T,T,T,T] => O = newO
+	implicit def t7O: Tuple7[T,T,T,T,T,T,T] => O = newO
+	implicit def t8O: Tuple8[T,T,T,T,T,T,T,T] => O = newO
+	implicit def t9O: Tuple9[T,T,T,T,T,T,T,T,T] => O = newO
+	implicit def t10O: Tuple10[T,T,T,T,T,T,T,T,T,T] => O = newO
+	implicit def t11O: Tuple11[T,T,T,T,T,T,T,T,T,T,T] => O = newO
+	implicit def t12O: Tuple12[T,T,T,T,T,T,T,T,T,T,T,T] => O = newO
+	implicit def t13O: Tuple13[T,T,T,T,T,T,T,T,T,T,T,T,T] => O = newO
+	implicit def t14O: Tuple14[T,T,T,T,T,T,T,T,T,T,T,T,T,T] => O = newO
+	implicit def t15O: Tuple15[T,T,T,T,T,T,T,T,T,T,T,T,T,T,T] => O = newO
+	implicit def t16O: Tuple16[T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T] => O = newO
+	implicit def t17O: Tuple17[T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T] => O = newO
+	implicit def t18O: Tuple18[T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T] => O = newO
+	implicit def t19O: Tuple19[T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T] => O = newO
+	implicit def t20O: Tuple20[T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T] => O = newO
+	implicit def t21O: Tuple21[T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T] => O = newO
+	implicit def t22O: Tuple22[T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T] => O = newO
 }

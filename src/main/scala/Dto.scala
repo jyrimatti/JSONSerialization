@@ -1,14 +1,14 @@
 case class EmployeeDto(
 	name: String,
 	age: Option[Int],			// optional built-in type
-	salary: Money,
+	salary: Money,				// custom type
 	bonus: Option[Money]	// optional custom type
 )
 
 // Classes don't need to be case classes
 class DepartmentDto(
 	val name: String,
-	val employees: Seq[EmployeeDto]
+	val employees: Seq[EmployeeDto]	 // Seq
 ) {
 	override def toString = "DepartmentDto(" + name + "," + employees + ")"
 }
@@ -18,11 +18,11 @@ object DepartmentDto {
 
 case class DivisionDto(
 	name: String,
-	departments: Set[DepartmentDto],
+	departments: Set[DepartmentDto],	// Set
 	manager: EmployeeDto
 )
 
 case class OrganizationDto(
 	name: String,
-	divisions: Array[DivisionDto]
+	divisions: Array[DivisionDto]			// Array
 )
