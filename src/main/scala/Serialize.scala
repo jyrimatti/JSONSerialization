@@ -16,7 +16,7 @@ object Serialize {
 	implicit val money_od: Deserializable[Option[Money]] = OptionIsDeserializable
 	
 	// Fully statically type safe serialization
-	// + compiler warns if the type is not serializable
+	// + compiler warns if a type is not serializable
 	// + compiler warns when new parameters are added to the object (due to EmployeeDto(_,_,_,_))
 	// + compiler warns when parameters are removed from the object 
 	// + parameter order does not matter
@@ -30,7 +30,7 @@ object Serialize {
   )}
 						 		  
 	// Almost statically type safe serialization
-	// + compiler warns if the type is not serializable
+	// + compiler warns if a type is not serializable
 	// - compiler does not warn when new parameters are added to the object
 	// + compiler warns when parameters are removed from the object 
 	// + parameter order does not matter
@@ -42,21 +42,36 @@ object Serialize {
 	)}
 	
 	// Almost statically type safe serialization 2
-	// + compiler warns if the type is not serializable
+	// + compiler warns if a type is not serializable
 	// + compiler warns when new parameters are added to the object
 	// + compiler warns when parameters are removed from the object
 	// - parameter order matters, i.e. switching 2 with the same type breaks json
 	// + clean syntax
 	// - Json keys given manually
-	implicit val organizationdto_s: Serializable[OrganizationDto] = { case OrganizationDto(name, departments) => (
+	implicit val divisiondto_s: Serializable[DivisionDto] = { case DivisionDto(name, departments, manager) => (
 		"name" -> name,
-		"departments" -> departments
+		"departments" -> departments,
+		"manager" -> manager
 	)}
 	
+	// Almost statically type safe serialization by reflection
+	// + compiler warns if a type is not serializable (better than regular reflection-based frameworks)
+	// + compiler does not nag when new parameters are added to the object
+	// + compiler does not nag when parameters are removed from the object
+	// - serialized fields retrieved with getDeclaredFields and getMethod =( Can this be improved in Scala 2.10?
+	// + clean syntax
+	// + Json keys deduced by reflection
+	implicit val organizationdto_s: Serializable[OrganizationDto] = OrganizationDto.apply _
 	
 	
 	
-	// fully statically type safe deserialization
+	// Fully statically type safe deserialization
+	// + compiler warns if a type is not deserializable
+	// + compiler warns when new parameters are added to the object
+	// + compiler warns when parameters are removed from the object 
+	// + parameter order does not matter
+	// - verbose syntax
+	// - Json keys given manually
 	implicit val empoyeedto_d: Deserializable[EmployeeDto] = {
 		case Json.Object(a@p("age"), 
 										 n@p("name"),
@@ -69,64 +84,65 @@ object Serialize {
 	}
 	
 	// due to (?) imperfect type inference, we must manually declare Traversable serializability
-	implicit val employeedto_ss: Serializable[Traversable[EmployeeDto]] = TraversableIsSerializable
-	implicit val employeedto_sd: Deserializable[Seq[EmployeeDto]] = SeqIsDeserializable
+	implicit def employeedto_ss: Serializable[Traversable[EmployeeDto]] = TraversableIsSerializable
+	implicit def employeedto_sd: Deserializable[Seq[EmployeeDto]] = SeqIsDeserializable
+	implicit def departementdto_sd: Deserializable[Set[DepartmentDto]] = SetIsDeserializable
 	
-	// almost statically type safe deserialization.
-	// + Compiler warns if the amount of constructor method arguments is changed (due to 'pN' prefix where N is the amount of arguments)
-	// - Compiler cannot warn if parameters are re-ordered in the object constructor.
+	// Almost statically type safe deserialization
+	// + compiler warns if a type is not deserializable
+	// + compiler warns when new parameters are added to the object (due to 'pN' prefix where N is the amount of arguments)
+	// + compiler warns when parameters are removed from the object 
+	// - compiler cannot warn if the order of the keys does not match that in the constructor
+	// + clean syntax
+	// - Json keys given manually
 	implicit val departmentdto_d: Deserializable[DepartmentDto] = p2 {
-		case Json.ObjectProps("name", "employees") => DepartmentDto.apply _
+		case Json.Keys("name", "employees") => DepartmentDto.apply
 	}
 	
-	implicit val departementdto_sd: Deserializable[Set[DepartmentDto]] = SetIsDeserializable
+	implicit val divisiondto_d: Deserializable[DivisionDto] = p3 {
+		case Json.Keys("name", "departments", "manager") => DivisionDto.apply
+	}
 	
+	// Almost statically type safe deserialization by reflection
+	// + compiler warns if a type is not deserializable
+	// +- compiler warns when new parameters are added to the object, but wouldn't have to (must use sN instead of overloaded s)
+	// +- compiler warns when parameters are removed from the object, but wouldn't have to (must use sN instead of overloaded s)
+	// - uses the given method as constructor but gets the parameters and their order from class fields =( Can this be improved in Scala 2.10?
+	// + clean syntax
+	// + Json keys deduced by reflection
 	implicit val organizationdto_d: Deserializable[OrganizationDto] = p2 {
-		case Json.ObjectProps("name", "departments") => OrganizationDto.apply _
+		case Json.Reflect() => OrganizationDto.apply
 	}
 
 	def main(args: Array[String]): Unit = {
+		def test(msg: String, json: String) = {
+			println(msg + " serialized to JSON:")
+			println(json)
+			println
+			json
+		}
+		
 		val employee = EmployeeDto("John Doe", Some(42), Money(3500, 50), Some(Money(2500, 20)))
 		val employee2 = EmployeeDto("Jill Doe", None, Money(3499, 51), None)
 		val department = DepartmentDto("IT", Seq(employee, employee2))
-		val organization = OrganizationDto("Firma", Set(department))
+		val division = DivisionDto("Europe", Set(department), employee)
+		val organization = OrganizationDto("Firma", Array(division))
 		
-		val employeeAsJson = Json serialize employee
-		println("Employee serialized to JSON:")
-		println(employeeAsJson)
-		println
-		
-		val employee2AsJson = Json serialize employee2
-		println("Another employee serialized to JSON:")
-		println(employee2AsJson)
-		println
-		
-		val departmentAsJson = Json serialize department
-		println("Department serialized to JSON:")
-		println(departmentAsJson)
-		println
-		
-		val organizationAsJson = Json serialize organization
-		println("Organization serialized to JSON:")
-		println(organizationAsJson)
-		println
-		
-		val departmentEmployeesAsJson = Json serialize department.employees
-		println("Department employees serialized to JSON:")
-		println(departmentEmployeesAsJson)
-		println
+		val employeeAsJson = test("Employee", Json serialize employee)
+		val employee2AsJson = test("Another employee", Json serialize employee2)
+		val departmentAsJson = test("Department", Json serialize department)
+		val divisionAsJson = test("Division", Json serialize division)
+		val organizationAsJson = test("Organization", Json serialize organization)
+		test("Only employees of a department", Json serialize department.employees)
 		
 		val e = Json.deserialize[EmployeeDto](employeeAsJson)
 		val e2 = Json.deserialize[EmployeeDto](employee2AsJson)
 		val d = Json.deserialize[DepartmentDto](departmentAsJson)
+		val di = Json.deserialize[DivisionDto](divisionAsJson)
 		val o = Json.deserialize[OrganizationDto](organizationAsJson)
 		
-		println("Employees, department and organization deserialized from JSON:")
-		println(e)
-		println(e2)
-		println(d)
-		println(o)
-		println
+		println("Employees, department, division and organization deserialized from JSON:")
+		Seq(e, e2, d, di, o, "") foreach println
 		
 		println("Deserialization succeeding with missing optional properties")
 		val withMissing = Json.deserialize[EmployeeDto]("""{"name": "Jack Doe", "salary": "14.03€"}""")
